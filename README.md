@@ -1,0 +1,2 @@
+# scper
+Google Driveに保存されている学校の時間割をJSONに変換し、CloudFlare R2へアップロードするためのアプリ

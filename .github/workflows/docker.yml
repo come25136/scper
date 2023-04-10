@@ -1,0 +1,41 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - main # 変更がmainブランチにpushされた場合にトリガーする
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout repository # リポジトリをチェックアウト
+      uses: actions/checkout@v2
+
+    - name: Login to Docker Hub # Docker Hubにログイン
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+    - name: Build and tag Docker image # Dockerイメージをビルドしてタグをつける
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        push: false # 一時的にプッシュしない
+        tags: |
+          scper:latest
+          scper:${{ github.sha }}
+
+    - name: Push Docker image to Docker Hub # DockerイメージをDocker Hubにプッシュ
+      if: github.ref == 'refs/heads/main' # mainブランチにコミットされた場合のみ実行する
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        push: true # プッシュを許可する
+        tags: |
+          scper:latest
+          scper:${{ github.sha }}
+        dockerfile: ./Dockerfile
+        repository: scper
