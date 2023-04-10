@@ -25,8 +25,8 @@ jobs:
         context: ./
         push: false # 一時的にプッシュしない
         tags: |
-          scper:latest
-          scper:${{ github.sha }}
+          come25136/scper:latest
+          come25136/scper:${{ github.sha }}
 
     - name: Push Docker image to Docker Hub # DockerイメージをDocker Hubにプッシュ
       if: github.ref == 'refs/heads/main' # mainブランチにコミットされた場合のみ実行する
@@ -35,7 +35,7 @@ jobs:
         context: ./
         push: true # プッシュを許可する
         tags: |
-          scper:latest
-          scper:${{ github.sha }}
+          come25136/scper:latest
+          come25136/scper:${{ github.sha }}
         dockerfile: ./Dockerfile
-        repository: scper
+        repository: come25136/scper
