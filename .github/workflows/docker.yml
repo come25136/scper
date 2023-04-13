@@ -30,7 +30,7 @@ jobs:
         tags: |
           come25136/scper:latest
           come25136/scper:${{ github.sha }}
-      working-directory: ${{env.working-directory}}
+        working-directory: ${{env.working-directory}}
 
     - name: Push Docker image to Docker Hub # DockerイメージをDocker Hubにプッシュ
       if: github.ref == 'refs/heads/main' # mainブランチにコミットされた場合のみ実行する
@@ -42,4 +42,4 @@ jobs:
           come25136/scper:latest
           come25136/scper:${{ github.sha }}
           repository: come25136/scper
-      working-directory: ${{env.working-directory}}
+        working-directory: ${{env.working-directory}}
