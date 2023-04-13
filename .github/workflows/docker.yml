@@ -25,7 +25,7 @@ jobs:
     - name: Build and tag Docker image # Dockerイメージをビルドしてタグをつける
       uses: docker/build-push-action@v2
       with:
-        context: ./${{env.working-directory}}/DockerFile
+        context: ${{env.working-directory}}/Dockerfile
         push: false # 一時的にプッシュしない
         tags: |
           come25136/scper:latest
@@ -35,7 +35,7 @@ jobs:
       if: github.ref == 'refs/heads/main' # mainブランチにコミットされた場合のみ実行する
       uses: docker/build-push-action@v2
       with:
-        context: ./${{env.working-directory}}/DockerFile
+        context: ${{env.working-directory}}/Dockerfile
         push: true # プッシュを許可する
         tags: |
           come25136/scper:latest
