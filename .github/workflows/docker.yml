@@ -9,9 +9,8 @@ jobs:
   build-and-push:
     runs-on: ubuntu-22.04
 
-    defaults:
-      run:
-        working-directory: ./pre_processor
+    env:
+      working-directory: ./pre_processor
 
     steps:
     - name: Checkout repository # リポジトリをチェックアウト
@@ -24,6 +23,7 @@ jobs:
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
     - name: Build and tag Docker image # Dockerイメージをビルドしてタグをつける
+      working-directory: ${{env.working-directory}}
       uses: docker/build-push-action@v2
       with:
         context: ./
@@ -34,6 +34,7 @@ jobs:
 
     - name: Push Docker image to Docker Hub # DockerイメージをDocker Hubにプッシュ
       if: github.ref == 'refs/heads/main' # mainブランチにコミットされた場合のみ実行する
+      working-directory: ${{env.working-directory}}
       uses: docker/build-push-action@v2
       with:
         context: ./
@@ -41,5 +42,4 @@ jobs:
         tags: |
           come25136/scper:latest
           come25136/scper:${{ github.sha }}
-        dockerfile: ./Dockerfile
         repository: come25136/scper
