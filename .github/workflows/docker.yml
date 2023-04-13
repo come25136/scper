@@ -9,6 +9,10 @@ jobs:
   build-and-push:
     runs-on: ubuntu-22.04
 
+    defaults:
+      run:
+        working-directory: ./pre_processor
+
     steps:
     - name: Checkout repository # リポジトリをチェックアウト
       uses: actions/checkout@v2

@@ -1,65 +1,104 @@
 import { createCanvas } from 'canvas';
 import * as dayjs from 'dayjs';
-import * as utc from 'dayjs/plugin/utc';
+import * as dayjsUtc from 'dayjs/plugin/utc';
+import * as dayjsTimezone from 'dayjs/plugin/timezone';
 import { TextItem } from 'pdfjs-dist/types/src/display/api';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf';
 
 import { zenkakuToHankaku } from '../utils';
+import { NichiyakuEvent, NichiyakuEventToJson } from './event';
 
-dayjs.extend(utc);
+dayjs.extend(dayjsUtc);
+dayjs.extend(dayjsTimezone);
 
-export type Item = TextItem & {
+const pdfTargetRanges = [
+  {
+    range: {
+      startRowIndex: 2,
+      endRowIndex: 20,
+    },
+    origin: {
+      x: 185,
+      y: 109,
+    },
+  },
+  {
+    range: {
+      startRowIndex: 23,
+      endRowIndex: 41,
+    },
+    origin: {
+      x: 185,
+      y: 621,
+    },
+  },
+];
+
+const timeMap = {
+  1: {
+    start: {
+      hour: 9,
+      minute: 15,
+    },
+    end: {
+      hour: 10,
+      minute: 45,
+    },
+  },
+  2: {
+    start: {
+      hour: 11,
+      minute: 0,
+    },
+    end: {
+      hour: 12,
+      minute: 30,
+    },
+  },
+  3: {
+    start: {
+      hour: 13,
+      minute: 30,
+    },
+    end: {
+      hour: 15,
+      minute: 0,
+    },
+  },
+  4: {
+    start: {
+      hour: 15,
+      minute: 15,
+    },
+    end: {
+      hour: 16,
+      minute: 45,
+    },
+  },
+} as const;
+
+type PDFItem = TextItem & {
   left: number;
   top: number;
 };
 
-export type UniversityEvent =
-  | {
-    roomType: 'lecture';
-    lectureMethod: 'face-to-face' | 'live' | 'video';
-    date: dayjs.Dayjs;
-    location: string;
-    room: string;
-    time: number;
-    subject: string;
-    teacher: string;
-    schoolGrade: number;
-  }
-  | {
-    roomType: 'event';
-    date: dayjs.Dayjs;
-    location: string;
-    room: string;
-    time: number;
-    subject: string;
-    schoolGrade: number;
-  }
-  | {
-    roomType: 'waiting room';
-    date: dayjs.Dayjs;
-    location: string;
-    room: string;
-    time: number;
-  };
-
-export type UniversityDisplayEvent = Omit<UniversityEvent, 'time'> & {
-  time: {
-    start: number;
-    end: number;
-  };
-};
-
-function groupTextItemsByCell(
+/**
+ * 
+ * @description PDFItemをセル毎に分ける
+ * @param verticalWidths PDF上の横幅の幅間隔
+ * @param horizontalHeights PDF上の縦幅の幅間隔
+ */
+function pdfItemToCells(
   verticalWidths: number[],
   horizontalHeights: number[],
-  items: Item[],
-): Item[][][] {
+  items: PDFItem[],
+): PDFItem[][][] {
   // セルの行数と列数を求める
   const numRows = horizontalHeights.length - 1;
   const numCols = verticalWidths.length - 1;
 
   // セルを初期化する
-  const cells: Item[][][] = [];
+  const cells: PDFItem[][][] = [];
   for (let row = 0; row < numRows; row++) {
     if (row === cells.length) cells.push([]);
 
@@ -73,6 +112,7 @@ function groupTextItemsByCell(
     // textitemが含まれる行番号を求める
     let row = -1;
     for (let i = 0; i < horizontalHeights.length - 1; i++) {
+      // 縦幅が下のセルにはみ出してる場合があるので含めない
       if (
         horizontalHeights[i] <= item.top &&
         item.top /*+ item.height*/ <= horizontalHeights[i + 1]
@@ -129,17 +169,41 @@ function groupTextItemsByCell(
   return cells;
 }
 
+function eventToJsonEvent(
+  event: NichiyakuEvent,
+  dateTime: {
+    start: string | dayjs.Dayjs,
+    end: dayjs.Dayjs
+  }
+): NichiyakuEventToJson {
+  const jsonObj: Partial<NichiyakuEvent> & NichiyakuEventToJson = {
+    ...event,
+    dateTime: {
+      start: typeof dateTime.start === 'string' ? dateTime.start : dateTime.start.toISOString(),
+      end: dateTime.end.toISOString(),
+    }
+  }
+
+  delete jsonObj.date
+
+  return jsonObj
+}
+
 export async function pdfToJson(pdfBuffer: ArrayBuffer) {
+  console.log('Loading pdf...')
   const loadingTask = pdfjsLib.getDocument(pdfBuffer);
   const document = await loadingTask.promise;
 
-  const timetables: UniversityEvent[][] = [];
+  const timetables: NichiyakuEvent[][] = [];
 
   for (let i = 1; i <= document.numPages; i++) {
+    console.log(`Page ${i} is processing...`)
+
     const page = await document.getPage(i);
     const viewport = page.getViewport({ scale: 1 });
     const textContent = await page.getTextContent();
 
+    console.log('Preparing canvas...')
     const canvas = createCanvas(viewport.width, viewport.height);
     const context = canvas.getContext('2d');
     await page.render({
@@ -147,6 +211,7 @@ export async function pdfToJson(pdfBuffer: ArrayBuffer) {
       viewport: viewport,
     }).promise;
 
+    console.log('Converting text position to pixels...')
     const items = textContent.items
       .filter((item): item is TextItem => 'str' in item)
       .map((item) => {
@@ -165,7 +230,8 @@ export async function pdfToJson(pdfBuffer: ArrayBuffer) {
         };
       });
 
-    const cells = groupTextItemsByCell(
+    console.log('Generating table data from text position data...')
+    const cells = pdfItemToCells(
       [
         81, 113, 154, 185, 317, 449, 581, 713, 844, 976, 1108, 1240, 1372, 1504,
         1636, 1768,
@@ -178,36 +244,15 @@ export async function pdfToJson(pdfBuffer: ArrayBuffer) {
       items,
     );
 
+    console.log('Normalizing texts...')
     const normalizedCells = cells.map((row) =>
       row.map((col) => zenkakuToHankaku(col.map((item) => item.str).join(''))),
     );
 
-    const rowRanges = [
-      {
-        range: {
-          startRowIndex: 2,
-          endRowIndex: 20,
-        },
-        origin: {
-          x: 185,
-          y: 109,
-        },
-      },
-      {
-        range: {
-          startRowIndex: 23,
-          endRowIndex: 41,
-        },
-        origin: {
-          x: 185,
-          y: 621,
-        },
-      },
-    ];
+    const timetable: NichiyakuEvent[] = [];
 
-    const timetable: UniversityEvent[] = [];
-
-    rowRanges.forEach((rowRange) => {
+    console.log('Generating timetable data...')
+    pdfTargetRanges.forEach((rowRange) => {
       const rows = normalizedCells.slice(
         rowRange.range.startRowIndex,
         rowRange.range.endRowIndex,
@@ -223,18 +268,21 @@ export async function pdfToJson(pdfBuffer: ArrayBuffer) {
               : 14 <= rowIndex && rowIndex <= 17
                 ? '3号館'
                 : null;
-        if (location === null) throw new Error('Invalid location');
+        if (location === null) throw new Error(`Invalid location. rowIndex:${rowIndex}`);
 
         const roomNumber = rows[rowIndex][1];
 
         for (let dateCol = 3; dateCol <= 14; dateCol += 4) {
           row.slice(dateCol, dateCol + 4).forEach((col, colIndex) => {
-            // console.log(
-            //   '----------------------------------------------------------------',
-            // );
-            // console.log(col);
+            const text = rows[rowIndex][dateCol + colIndex];
+            const isSkip = text === '';
 
-            // console.log('dateColIndex');
+            console.log(`Processing row:${rowIndex} col:${dateCol + colIndex} subject:"${rows[rowIndex][dateCol + colIndex]}" isSkip:${isSkip}`);
+
+            if (isSkip) return
+
+            if (!(0 <= colIndex && colIndex <= 3)) throw new Error('Invalid time column index')
+
             const dateColIndex =
               3 <= dateCol && dateCol <= 6
                 ? 4
@@ -245,27 +293,22 @@ export async function pdfToJson(pdfBuffer: ArrayBuffer) {
                     : null;
             if (dateColIndex === null) throw new Error('Invalid date');
 
-            // console.log('dayjs');
             const date = dayjs(
               normalizedCells[rowRange.range.startRowIndex - 2][
                 dateColIndex
               ].replace(/(\d+)月(\d+)日.*/, '2023-$1-$2'),
               'YYYY-M-D',
-            );
+            ).tz('Asia/Tokyo', true);
 
-            // console.log('getImageData');
-            const x =
+            const xPixel =
               rowRange.origin.x +
               103 +
               (dateCol - 3) * 132 +
               colIndex * 132 +
               3;
-            const y = rowRange.origin.y + (rowIndex * 51) / 2 + 3;
-            // console.log({ x, i2, y, rowIndex });
-            // console.log(canvas.width, canvas.height);
-            const { data: color } = context.getImageData(x, y, 1, 1);
+            const yPixel = rowRange.origin.y + (rowIndex * 51) / 2 + 3;
+            const { data: color } = context.getImageData(xPixel, yPixel, 1, 1);
 
-            // console.log('processing grade');
             const grade =
               color[0] === 204 && color[1] === 255 && color[2] === 255
                 ? 1
@@ -278,67 +321,66 @@ export async function pdfToJson(pdfBuffer: ArrayBuffer) {
                       : color[0] === 204 && color[1] === 204 && color[2] === 255
                         ? 'waiting room'
                         : null;
+
             if (grade === null) {
+              // どの学年にも割り当てられていなければスキップ
               if (color[0] === 255 && color[1] === 255 && color[2] === 255)
                 return;
 
-              return;
+              // オンデマンド系はまだ実装していないのでスキップする
+              // FIXME: 実装したらエラーに変える
+              return
             }
 
             if (grade === 'waiting room') {
               timetable.push({
-                roomType: 'waiting room',
+                type: 'waiting room',
                 date: date,
                 location: location,
                 room: roomNumber,
-                time: colIndex + 1,
+                time: colIndex + 1 as NichiyakuEvent['time'],
               });
 
               return;
             }
 
-            let subject = rows[rowIndex][dateCol + colIndex];
-            if (subject === '') return;
-
             const teacher = rows[rowIndex + 1][dateCol + colIndex];
 
             if (teacher === '') {
               timetable.push({
-                roomType: 'event',
+                type: 'event',
                 date: date,
                 location: location,
                 room: roomNumber,
-                time: colIndex + 1,
-                subject,
+                time: colIndex + 1 as NichiyakuEvent['time'],
+                subject: text,
                 schoolGrade: grade,
               });
 
               return;
             }
 
-            const lectureMethod =
-              subject[1] === ':'
-                ? subject.startsWith('対:')
-                  ? 'face-to-face'
-                  : subject.startsWith('配:')
-                    ? 'live'
-                    : subject.startsWith('オ:')
-                      ? 'video'
-                      : undefined
-                : null;
-            if (lectureMethod === undefined)
-              throw new Error('Unknown lecture method');
+            if (text[1] !== ':')
+              throw new Error(`Unknown lecture subject: ${text}`)
 
-            if (lectureMethod) subject = subject.slice(2);
+            const lectureMethodStr = text.split(':')[0]
+            const lectureMethod = ({
+              '対': 'face-to-face',
+              '配': 'live',
+              'オ': 'video'
+            } as const)[lectureMethodStr]
+
+            if (lectureMethod === undefined)
+              throw new Error(`Unsupported lecture method: ${lectureMethodStr}`);
 
             timetable.push({
-              roomType: 'lecture',
+              type: 'lecture',
               lectureMethod,
               date: date,
               location: location,
               room: roomNumber,
-              time: colIndex + 1,
-              subject,
+              time: colIndex + 1 as NichiyakuEvent['time'],
+              subject: text.slice(2),
               teacher: teacher,
               schoolGrade: grade,
             });
@@ -352,8 +394,6 @@ export async function pdfToJson(pdfBuffer: ArrayBuffer) {
 
   const sortedTimetables = timetables
     .flat(1)
-    // .sort((a, b) => (a.room < b.room ? -1 : 1))
-    // .sort((a, b) => (a.time < b.time ? -1 : 1))
     .sort((a, b) => {
       if (a.date.diff(b.date, 'd') !== 0) {
         return a.date.diff(b.date, 'd');
@@ -370,30 +410,40 @@ export async function pdfToJson(pdfBuffer: ArrayBuffer) {
       return 0;
     });
 
-  const displayTimetables: UniversityDisplayEvent[] = [];
+  const displayTimetables: NichiyakuEventToJson[] = [];
 
-  let continues: UniversityDisplayEvent | null = null;
+  let continues: NichiyakuEventToJson | null = null;
   for (let i = 0; i < sortedTimetables.length - 1; i++) {
-    const current: UniversityEvent = sortedTimetables[i];
-    const next: UniversityEvent | undefined = sortedTimetables[i + 1];
+    const current: NichiyakuEvent = sortedTimetables[i];
+    const next: NichiyakuEvent | undefined = sortedTimetables[i + 1];
+
+    const currentRealTime = timeMap[current.time]
+    const currentDateTime = current.date
+      .set('h', currentRealTime.start.hour)
+      .set('m', currentRealTime.start.minute)
 
     if (
       next &&
       current.room === next.room &&
-      ((current.roomType !== 'waiting room' &&
-        next.roomType !== 'waiting room' &&
+      ((current.type !== 'waiting room' &&
+        next.type !== 'waiting room' &&
         current.subject === next.subject) ||
-        (current.roomType === 'waiting room' &&
-          next.roomType === 'waiting room')) &&
+        (current.type === 'waiting room' &&
+          next.type === 'waiting room')) &&
       current.date.diff(next.date, 'd') === 0
     ) {
-      continues = {
-        ...current,
-        time: {
-          start: continues?.time.start ?? current.time,
-          end: next.time,
+      const endRealTime = timeMap[next.time]
+      const endDateTime = current.date
+        .set('h', endRealTime.start.hour)
+        .set('m', endRealTime.start.minute)
+
+      continues = eventToJsonEvent(
+        current,
+        {
+          start: continues?.dateTime.start ?? currentDateTime,
+          end: endDateTime,
         },
-      };
+      );
 
       continue;
     } else if (continues) {
@@ -403,13 +453,17 @@ export async function pdfToJson(pdfBuffer: ArrayBuffer) {
       continue;
     }
 
-    displayTimetables.push({
-      ...current,
-      time: {
-        start: current.time,
-        end: current.time,
+    const endDateTime = current.date
+      .set('h', currentRealTime.end.hour)
+      .set('m', currentRealTime.end.minute)
+
+    displayTimetables.push(eventToJsonEvent(
+      current,
+      {
+        start: currentDateTime,
+        end: endDateTime,
       },
-    });
+    ));
   }
 
   return displayTimetables;
