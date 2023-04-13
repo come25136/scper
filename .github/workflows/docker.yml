@@ -37,7 +37,7 @@ jobs:
       with:
         context: ${{env.working-directory}}
         push: true # プッシュを許可する
+        repository: come25136/scper
         tags: |
           come25136/scper:latest
           come25136/scper:${{ github.sha }}
-          repository: come25136/scper
