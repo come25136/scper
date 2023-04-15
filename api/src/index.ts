@@ -25,6 +25,10 @@ const s3 = new S3.S3Client({
 
 const fastify = Fastify().withTypeProvider<TypeBoxTypeProvider>()
 
+fastify.get('/_healthcheck', async (request, reply) => {
+  reply.status(200).send()
+})
+
 fastify.get<{
   Params: {
     schoolId: string
