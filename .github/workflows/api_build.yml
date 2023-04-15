@@ -1,22 +1,22 @@
-name: Build and Push Docker Image
+name: Build and Push Docker Image for API
 
 on:
   push:
     branches:
-      - main # 変更がmainブランチにpushされた場合にトリガーする
+      - main
 
 jobs:
   build-and-push:
     runs-on: ubuntu-22.04
 
     env:
-      working-directory: ./pre_processor
+      working-directory: ./
 
     steps:
-    - name: Checkout repository # リポジトリをチェックアウト
-      uses: actions/checkout@v2
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-    - name: Login to Docker Hub # Docker Hubにログイン
+    - name: Login to Docker Hub
       uses: docker/login-action@v1
       with:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
@@ -28,8 +28,8 @@ jobs:
         context: ${{env.working-directory}}
         push: false # 一時的にプッシュしない
         tags: |
-          come25136/scper:latest
-          come25136/scper:${{ github.sha }}
+          come25136/scper-api:latest
+          come25136/scper-api:${{ github.sha }}
 
     - name: Push Docker image to Docker Hub # DockerイメージをDocker Hubにプッシュ
       if: github.ref == 'refs/heads/main' # mainブランチにコミットされた場合のみ実行する
@@ -37,7 +37,7 @@ jobs:
       with:
         context: ${{env.working-directory}}
         push: true # プッシュを許可する
-        repository: come25136/scper
+        repository: come25136/scper-api
         tags: |
-          come25136/scper:latest
-          come25136/scper:${{ github.sha }}
+          come25136/scper-api:latest
+          come25136/scper-api:${{ github.sha }}
