@@ -190,7 +190,7 @@ fastify.get<{
       ];
 
       return {
-        uid: `${createHash('sha256').update(event.location + event.room + event.dateTime).digest('hex')}@scper.momizi.app`,
+        uid: `${createHash('sha256').update(event.location + event.room + event.dateTime.start).digest('hex')}@scper.momizi.app`,
         productId: 'come25136/scper-api',
         title,
         description,
