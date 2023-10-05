@@ -150,21 +150,21 @@ fastify.get<{
             event.type === 'event' ||
             (
               event.type === 'lecture' &&
-              request.query.lessonNames.includes(event.subject)
+              request.query.lessonNames.some(lessonName => event.subject.startsWith(lessonName))
             )
           )
         )
       )
     )
     .map((event) => {
-      const startDateTime = dayjs(event.dateTime.start).tz('Asia/Tokyo')
-      const endDateTime = dayjs(event.dateTime.end).tz('Asia/Tokyo')
+      const startDateTime = dayjs(event.dateTime.start).utc()
+      const endDateTime = dayjs(event.dateTime.end).utc()
 
       let title =
         event.type === 'event'
           ? event.subject
           : event.type === 'lecture'
-            ? event.type
+            ? event.subject
             : event.type === 'waiting room'
               ? '学生控室'
               : '不明';
